@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'modul_04_app.dart';
 
 void main() {
-  runApp(const Modul04App());
+  runApp(
+    const ProviderScope(
+      child: Modul04App(),
+    ),
+  );
 }

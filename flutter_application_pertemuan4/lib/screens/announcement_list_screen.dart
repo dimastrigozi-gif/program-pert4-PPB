@@ -1,97 +1,70 @@
 import 'package:flutter/material.dart';
-import '../models/announcement.dart';
-import '../services/announcement_api.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/announcement_providers.dart';
 import '../widgets/announcement_card.dart';
 import 'announcement_detail_screen.dart';
 
-class AnnouncementListScreen extends StatefulWidget {
+// 1. Ubah dari StatefulWidget menjadi ConsumerWidget
+class AnnouncementListScreen extends ConsumerWidget {
   const AnnouncementListScreen({super.key});
 
   @override
-  State<AnnouncementListScreen> createState() => _AnnouncementListScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 2. Pantau state dari provider
+    final announcementsAsync = ref.watch(announcementsProvider);
 
-class _AnnouncementListScreenState extends State<AnnouncementListScreen> {
-  late AnnouncementApi _api;
-  late Future<List<Announcement>> _futurePengumuman;
-
-  @override
-  void initState() {
-    super.initState();
-    _api = AnnouncementApi();
-    // PENTING: Future dibuat di sini, bukan di dalam build()
-    _futurePengumuman = _api.ambilPengumuman();
-  }
-
-  void _muatUlang() {
-    setState(() {
-      _futurePengumuman = _api.ambilPengumuman();
-    });
-  }
-
-  @override
-  void dispose() {
-    _api.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Portal Pengumuman'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _muatUlang,
+            // 3. Cara refresh di Riverpod
+            onPressed: () => ref.invalidate(announcementsProvider),
           ),
         ],
       ),
-      body: FutureBuilder<List<Announcement>>(
-        future: _futurePengumuman,
-        builder: (context, snapshot) {
-          // 1. KEADAAN MEMUAT
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Memuat pengumuman...'),
-                ],
-              ),
-            );
-          }
+      // 4. Gunakan .when() untuk menangani 4 keadaan secara otomatis
+      body: announcementsAsync.when(
+        // Keadaan MEMUAT
+        loading: () => const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Memuat pengumuman...'),
+            ],
+          ),
+        ),
 
-          // 2. KEADAAN GAGAL
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'Gagal memuat: ${snapshot.error}',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _muatUlang,
-                    child: const Text('Coba Lagi'),
-                  ),
-                ],
+        // Keadaan GAGAL
+        error: (error, stackTrace) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'Gagal memuat: $error',
+                  textAlign: TextAlign.center,
+                ),
               ),
-            );
-          }
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(announcementsProvider),
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        ),
 
-          // 3. KEADAAN KOSONG
-          final data = snapshot.data ?? [];
+        // Keadaan BERHASIL (termasuk Kosong)
+        data: (data) {
           if (data.isEmpty) {
+            // Keadaan KOSONG
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -104,9 +77,9 @@ class _AnnouncementListScreenState extends State<AnnouncementListScreen> {
             );
           }
 
-          // 4. KEADAAN BERHASIL
+          // Keadaan BERHASIL (Ada data)
           return RefreshIndicator(
-            onRefresh: () async => _muatUlang(),
+            onRefresh: () async => ref.refresh(announcementsProvider.future),
             child: ListView.builder(
               itemCount: data.length,
               itemBuilder: (context, index) {
